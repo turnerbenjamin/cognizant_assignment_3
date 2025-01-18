@@ -6,14 +6,17 @@ using SingleActiveCaseEnforcement.Model;
 
 namespace SingleActiveCaseEnforcement
 {
-    public class SingleActiveCaseEnforcenentPlugin : PluginBase
+    public class SingleActiveCaseEnforcementPlugin : PluginBase
     {
-        public SingleActiveCaseEnforcenentPlugin(
-            string unsecureConfiguration,
-            string secureConfiguration
-        )
-            : base(typeof(SingleActiveCaseEnforcenentPlugin)) { }
+        public SingleActiveCaseEnforcementPlugin()
+            : base(typeof(SingleActiveCaseEnforcementPlugin)) { }
 
+        /// <summary>
+        /// Plug-in entry point to be used with the Case creation message.
+        /// Throws an error if the customer associated with a target case is
+        /// associated with one or more active cases.
+        /// </summary>
+        /// <param name="localPluginContext">The local plugin context.</param>
         protected override void ExecuteDataversePlugin(
             ILocalPluginContext localPluginContext
         )
@@ -24,27 +27,39 @@ namespace SingleActiveCaseEnforcement
             }
 
             var context = localPluginContext.PluginExecutionContext;
-            var tracingService = localPluginContext.TracingService;
             var service = localPluginContext.PluginUserService;
 
             var targetCase = GetTargetCase(context);
+
+            GuardThatCustomerHasNoActiveCases(targetCase, service);
+        }
+
+        // Looks for an active case associated with the same customer. If an
+        // active case is found, throws an Invalid PluginExecutionException to
+        // be displayed to the user
+        private void GuardThatCustomerHasNoActiveCases(
+            Case targetCase,
+            IOrganizationService service
+        )
+        {
             var currentlyActiveCaseForCustomer = FindActiveCaseForCustomer(
                 targetCase.Customer.Id,
                 service
             );
 
-            if (currentlyActiveCaseForCustomer != null)
+            if (currentlyActiveCaseForCustomer is null)
             {
-                throw new InvalidPluginExecutionException(
-                    "An active case already exists for this customer: "
-                        + currentlyActiveCaseForCustomer.Title
-                );
+                return;
             }
-            tracingService.Trace(
-                $"Case creation permitted: {targetCase.Title}"
+
+            throw new InvalidPluginExecutionException(
+                "An active case already exists for this customer: "
+                    + currentlyActiveCaseForCustomer.Title
             );
         }
 
+        // Looks for an active case associated with the given customer id.
+        // Returns a case where one is found. Else, returns null.
         private Case FindActiveCaseForCustomer(
             Guid customerId,
             IOrganizationService organizationService
@@ -54,30 +69,52 @@ namespace SingleActiveCaseEnforcement
             {
                 ColumnSet = new ColumnSet(Case.TitleFieldLogicalName),
                 TopCount = 1,
+                Criteria = GetActiveCasesForCustomerFilterExpression(
+                    customerId
+                ),
             };
 
+            var result = organizationService.RetrieveMultiple(query);
+            return ParseFirstEntityAsCaseFromEntityCollection(result);
+        }
+
+        // Returns a filter expression used to identify active cases associated
+        // with the provided customer id
+        private FilterExpression GetActiveCasesForCustomerFilterExpression(
+            Guid customerId
+        )
+        {
             const int caseActiveStatusCode = 0;
-            query.Criteria.AddCondition(
+            var filterExpression = new FilterExpression();
+            filterExpression.AddCondition(
                 Case.StatusFieldLogicalName,
                 ConditionOperator.Equal,
                 caseActiveStatusCode
             );
 
-            query.Criteria.AddCondition(
+            filterExpression.AddCondition(
                 Case.CustomerFieldLogicalName,
                 ConditionOperator.Equal,
                 customerId
             );
+            return filterExpression;
+        }
 
-            var result = organizationService.RetrieveMultiple(query);
-            var entity = result.Entities.FirstOrDefault<Entity>();
-            if (entity is null)
+        // Tries to parse the first entity from a case collection as a case. If
+        // the collection is empty, returns null
+        private Case ParseFirstEntityAsCaseFromEntityCollection(
+            EntityCollection result
+        )
+        {
+            if (result is null || result.Entities.Count == 0)
             {
                 return null;
             }
-            return new Case(entity);
+            return (Case)result.Entities.First();
         }
 
+        // Reads the target value from the plugin context and returns this as a
+        // case. Throws an error if target is null
         private Case GetTargetCase(IPluginExecutionContext context)
         {
             if (
@@ -89,7 +126,8 @@ namespace SingleActiveCaseEnforcement
             {
                 throw new ArgumentException("Target is null");
             }
-            return new Case(entity);
+
+            return (Case)entity;
         }
     }
 }
