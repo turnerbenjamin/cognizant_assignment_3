@@ -12,55 +12,97 @@ namespace SingleActiveCaseEnforcement
             : base(typeof(SingleActiveCaseEnforcementPlugin)) { }
 
         /// <summary>
-        /// Plug-in entry point to be used with the Case creation message.
-        /// Throws an error if the customer associated with a target case is
-        /// associated with one or more active cases.
+        ///     Plug-in entry point for the Case creation message. Ensures that
+        ///     the customer associated with the target case has no other active
+        ///     cases.
         /// </summary>
         /// <param name="localPluginContext">The local plugin context.</param>
+        /// <exception cref="ArgumentNullException">
+        ///     Thrown when the local plugin context is null.
+        /// </exception>
         protected override void ExecuteDataversePlugin(
             ILocalPluginContext localPluginContext
         )
         {
-            if (localPluginContext == null)
-            {
-                throw new ArgumentNullException(nameof(localPluginContext));
-            }
+            GuardLocalPluginContextIsNotNull(localPluginContext);
 
             var context = localPluginContext.PluginExecutionContext;
             var service = localPluginContext.PluginUserService;
 
-            var targetCase = GetTargetCase(context);
+            var targetCase = ReadTargetCase(context);
 
             GuardThatCustomerHasNoActiveCases(targetCase, service);
         }
 
-        // Looks for an active case associated with the same customer. If an
-        // active case is found, throws an Invalid PluginExecutionException to
-        // be displayed to the user
+        /// <summary>
+        ///     Reads the target value from the plugin context and returns it as
+        ///     a Case object.
+        /// </summary>
+        /// <param name="context">The plugin execution context.</param>
+        /// <returns>A Case object representing the target entity.</returns>
+        /// <exception cref="ArgumentException">
+        ///     Thrown when the target is null.
+        /// </exception>
+        private Case ReadTargetCase(IPluginExecutionContext context)
+        {
+            if (
+                !context.InputParameters.TryGetValue(
+                    "Target",
+                    out Entity entity
+                )
+            )
+            {
+                throw new ArgumentException("Target is null");
+            }
+
+            return (Case)entity;
+        }
+
+        /// <summary>
+        ///     Ensures that the customer associated with the target case has no
+        ///     other active cases. If an active case is found, throws an
+        ///     InvalidPluginExecutionException to be displayed to the user.
+        /// </summary>
+        /// <param name="targetCase">The target case to check.</param>
+        /// <param name="service">
+        ///     The organisation service to fetch cases from the Dataverse.
+        /// </param>
+        /// <exception cref="InvalidPluginExecutionException">
+        ///     Thrown when an active case is found for the customer.
+        /// </exception>
         private void GuardThatCustomerHasNoActiveCases(
             Case targetCase,
             IOrganizationService service
         )
         {
-            var currentlyActiveCaseForCustomer = FindActiveCaseForCustomer(
-                targetCase.Customer.Id,
-                service
-            );
+            var currentlyActiveCaseForCustomer =
+                RetrieveActiveCaseForCustomerOrNull(
+                    targetCase.Customer.Id,
+                    service
+                );
 
-            if (currentlyActiveCaseForCustomer is null)
+            if (currentlyActiveCaseForCustomer != null)
             {
-                return;
+                throw new InvalidPluginExecutionException(
+                    "An active case already exists for this customer: "
+                        + currentlyActiveCaseForCustomer.Title
+                );
             }
-
-            throw new InvalidPluginExecutionException(
-                "An active case already exists for this customer: "
-                    + currentlyActiveCaseForCustomer.Title
-            );
         }
 
-        // Looks for an active case associated with the given customer id.
-        // Returns a case where one is found. Else, returns null.
-        private Case FindActiveCaseForCustomer(
+        /// <summary>
+        ///     Looks for an active case associated with the given customer ID.
+        /// </summary>
+        /// <param name="customerId">
+        ///     The ID of the customer to check for active cases.
+        /// </param>
+        /// <param name="organizationService">
+        ///     The organization service to use for the query.
+        /// </param>
+        /// <returns>
+        ///     A Case object if an active case is found; otherwise, null.
+        /// </returns>
+        private Case RetrieveActiveCaseForCustomerOrNull(
             Guid customerId,
             IOrganizationService organizationService
         )
@@ -69,18 +111,22 @@ namespace SingleActiveCaseEnforcement
             {
                 ColumnSet = new ColumnSet(Case.TitleFieldLogicalName),
                 TopCount = 1,
-                Criteria = GetActiveCasesForCustomerFilterExpression(
-                    customerId
-                ),
+                Criteria = BuildActiveCasesForCustomerFilter(customerId),
             };
 
             var result = organizationService.RetrieveMultiple(query);
-            return ParseFirstEntityAsCaseFromEntityCollection(result);
+            return GetFirstCaseFromCollectionOrNull(result);
         }
 
-        // Returns a filter expression used to identify active cases associated
-        // with the provided customer id
-        private FilterExpression GetActiveCasesForCustomerFilterExpression(
+        /// <summary>
+        ///     Builds a filter expression to identify active cases associated
+        ///     with the provided customer ID.
+        /// </summary>
+        /// <param name="customerId">
+        ///     The ID of the customer to check for active cases.
+        /// </param>
+        /// <returns>A FilterExpression object to be used in a query.</returns>
+        private FilterExpression BuildActiveCasesForCustomerFilter(
             Guid customerId
         )
         {
@@ -100,11 +146,15 @@ namespace SingleActiveCaseEnforcement
             return filterExpression;
         }
 
-        // Tries to parse the first entity from a case collection as a case. If
-        // the collection is empty, returns null
-        private Case ParseFirstEntityAsCaseFromEntityCollection(
-            EntityCollection result
-        )
+        /// <summary>
+        ///     Tries to parse the first entity from an EntityCollection as a
+        ///     Case object. If the collection is empty, returns null.
+        /// </summary>
+        /// <param name="result">The EntityCollection to parse.</param>
+        /// <returns>
+        ///     A Case object if an entity is found; otherwise, null.
+        /// </returns>
+        private Case GetFirstCaseFromCollectionOrNull(EntityCollection result)
         {
             if (result is null || result.Entities.Count == 0)
             {
@@ -113,21 +163,23 @@ namespace SingleActiveCaseEnforcement
             return (Case)result.Entities.First();
         }
 
-        // Reads the target value from the plugin context and returns this as a
-        // case. Throws an error if target is null
-        private Case GetTargetCase(IPluginExecutionContext context)
+        /// <summary>
+        ///     Ensures that the local plugin context is not null.
+        /// </summary>
+        /// <param name="localPluginContext">
+        ///     The local plugin context to check.
+        /// </param>
+        /// <exception cref="ArgumentNullException">
+        ///     Thrown when the local plugin context is null.
+        /// </exception>
+        private void GuardLocalPluginContextIsNotNull(
+            ILocalPluginContext localPluginContext
+        )
         {
-            if (
-                !context.InputParameters.TryGetValue(
-                    "Target",
-                    out Entity entity
-                )
-            )
+            if (localPluginContext == null)
             {
-                throw new ArgumentException("Target is null");
+                throw new ArgumentNullException(nameof(localPluginContext));
             }
-
-            return (Case)entity;
         }
     }
 }
