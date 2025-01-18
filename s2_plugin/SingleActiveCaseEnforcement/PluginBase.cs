@@ -5,6 +5,10 @@ using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Extensions;
 using Microsoft.Xrm.Sdk.PluginTelemetry;
 
+
+/*
+* GENERATED USING PAC PLUGIN INIT
+*/
 namespace SingleActiveCaseEnforcement
 {
     /// <summary>
