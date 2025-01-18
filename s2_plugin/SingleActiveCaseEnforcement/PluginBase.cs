@@ -1,9 +1,9 @@
-using Microsoft.Xrm.Sdk;
-using Microsoft.Xrm.Sdk.Extensions;
-using Microsoft.Xrm.Sdk.PluginTelemetry;
 using System;
 using System.Runtime.CompilerServices;
 using System.ServiceModel;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Extensions;
+using Microsoft.Xrm.Sdk.PluginTelemetry;
 
 namespace SingleActiveCaseEnforcement
 {
@@ -31,20 +31,28 @@ namespace SingleActiveCaseEnforcement
         /// <param name="serviceProvider">The service provider.</param>
         /// <remarks>
         /// </remarks>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Globalization", "CA1303:Do not pass literals as localized parameters", Justification = "Execute")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage(
+            "Microsoft.Globalization",
+            "CA1303:Do not pass literals as localized parameters",
+            Justification = "Execute"
+        )]
         public void Execute(IServiceProvider serviceProvider)
         {
             if (serviceProvider == null)
             {
-                throw new InvalidPluginExecutionException(nameof(serviceProvider));
+                throw new InvalidPluginExecutionException(
+                    nameof(serviceProvider)
+                );
             }
 
             // Construct the local plug-in context.
             var localPluginContext = new LocalPluginContext(serviceProvider);
 
-            localPluginContext.Trace($"Entered {PluginClassName}.Execute() " +
-                $"Correlation Id: {localPluginContext.PluginExecutionContext.CorrelationId}, " +
-                $"Initiating User: {localPluginContext.PluginExecutionContext.InitiatingUserId}");
+            localPluginContext.Trace(
+                $"Entered {PluginClassName}.Execute() "
+                    + $"Correlation Id: {localPluginContext.PluginExecutionContext.CorrelationId}, "
+                    + $"Initiating User: {localPluginContext.PluginExecutionContext.InitiatingUserId}"
+            );
 
             try
             {
@@ -56,13 +64,20 @@ namespace SingleActiveCaseEnforcement
             }
             catch (FaultException<OrganizationServiceFault> orgServiceFault)
             {
-                localPluginContext.Trace($"Exception: {orgServiceFault.ToString()}");
+                localPluginContext.Trace(
+                    $"Exception: {orgServiceFault.ToString()}"
+                );
 
-                throw new InvalidPluginExecutionException($"OrganizationServiceFault: {orgServiceFault.Message}", orgServiceFault);
+                throw new InvalidPluginExecutionException(
+                    $"OrganizationServiceFault: {orgServiceFault.Message}",
+                    orgServiceFault
+                );
             }
             finally
             {
-                localPluginContext.Trace($"Exiting {PluginClassName}.Execute()");
+                localPluginContext.Trace(
+                    $"Exiting {PluginClassName}.Execute()"
+                );
             }
         }
 
@@ -70,7 +85,9 @@ namespace SingleActiveCaseEnforcement
         /// Placeholder for a custom plug-in implementation.
         /// </summary>
         /// <param name="localPluginContext">Context for the current plug-in.</param>
-        protected virtual void ExecuteDataversePlugin(ILocalPluginContext localPluginContext)
+        protected virtual void ExecuteDataversePlugin(
+            ILocalPluginContext localPluginContext
+        )
         {
             // Do nothing.
         }
@@ -120,7 +137,7 @@ namespace SingleActiveCaseEnforcement
         /// <summary>
         /// ILogger for this plugin.
         /// </summary>
-        ILogger Logger { get;  }
+        ILogger Logger { get; }
 
         /// <summary>
         /// Writes a trace message to the trace log.
@@ -183,32 +200,42 @@ namespace SingleActiveCaseEnforcement
         {
             if (serviceProvider == null)
             {
-                throw new InvalidPluginExecutionException(nameof(serviceProvider));
+                throw new InvalidPluginExecutionException(
+                    nameof(serviceProvider)
+                );
             }
 
             ServiceProvider = serviceProvider;
 
             Logger = serviceProvider.Get<ILogger>();
 
-            PluginExecutionContext = serviceProvider.Get<IPluginExecutionContext>();
+            PluginExecutionContext =
+                serviceProvider.Get<IPluginExecutionContext>();
 
             TracingService = new LocalTracingService(serviceProvider);
 
-            NotificationService = serviceProvider.Get<IServiceEndpointNotificationService>();
+            NotificationService =
+                serviceProvider.Get<IServiceEndpointNotificationService>();
 
             OrgSvcFactory = serviceProvider.Get<IOrganizationServiceFactory>();
 
-            PluginUserService = serviceProvider.GetOrganizationService(PluginExecutionContext.UserId); // User that the plugin is registered to run as, Could be same as current user.
+            PluginUserService = serviceProvider.GetOrganizationService(
+                PluginExecutionContext.UserId
+            ); // User that the plugin is registered to run as, Could be same as current user.
 
-            InitiatingUserService = serviceProvider.GetOrganizationService(PluginExecutionContext.InitiatingUserId); //User who's action called the plugin.
-
+            InitiatingUserService = serviceProvider.GetOrganizationService(
+                PluginExecutionContext.InitiatingUserId
+            ); //User who's action called the plugin.
         }
 
         /// <summary>
         /// Writes a trace message to the trace log.
         /// </summary>
         /// <param name="message">Message name to trace.</param>
-        public void Trace(string message, [CallerMemberName] string method = null)
+        public void Trace(
+            string message,
+            [CallerMemberName] string method = null
+        )
         {
             if (string.IsNullOrWhiteSpace(message) || TracingService == null)
             {
@@ -235,7 +262,8 @@ namespace SingleActiveCaseEnforcement
         {
             DateTime utcNow = DateTime.UtcNow;
 
-            var context = (IExecutionContext)serviceProvider.GetService(typeof(IExecutionContext));
+            var context = (IExecutionContext)
+                serviceProvider.GetService(typeof(IExecutionContext));
 
             DateTime initialTimestamp = context.OperationCreatedOn;
 
@@ -244,7 +272,8 @@ namespace SingleActiveCaseEnforcement
                 initialTimestamp = utcNow;
             }
 
-            _tracingService = (ITracingService)serviceProvider.GetService(typeof(ITracingService));
+            _tracingService = (ITracingService)
+                serviceProvider.GetService(typeof(ITracingService));
 
             _previousTraceTime = initialTimestamp;
         }
@@ -254,19 +283,27 @@ namespace SingleActiveCaseEnforcement
             var utcNow = DateTime.UtcNow;
 
             // The duration since the last trace.
-            var deltaMilliseconds = utcNow.Subtract(_previousTraceTime).TotalMilliseconds;
+            var deltaMilliseconds = utcNow
+                .Subtract(_previousTraceTime)
+                .TotalMilliseconds;
 
             try
             {
-
                 if (args == null || args.Length == 0)
-                    _tracingService.Trace($"[+{deltaMilliseconds:N0}ms] - {message}");
+                    _tracingService.Trace(
+                        $"[+{deltaMilliseconds:N0}ms] - {message}"
+                    );
                 else
-                    _tracingService.Trace($"[+{deltaMilliseconds:N0}ms] - {string.Format(message, args)}");
+                    _tracingService.Trace(
+                        $"[+{deltaMilliseconds:N0}ms] - {string.Format(message, args)}"
+                    );
             }
             catch (FormatException ex)
             {
-                throw new InvalidPluginExecutionException($"Failed to write trace message due to error {ex.Message}", ex);
+                throw new InvalidPluginExecutionException(
+                    $"Failed to write trace message due to error {ex.Message}",
+                    ex
+                );
             }
             _previousTraceTime = utcNow;
         }
