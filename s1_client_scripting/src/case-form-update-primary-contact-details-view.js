@@ -1,5 +1,7 @@
-//Declare functionality within a namespace
+//Set publisher namespace
 this.cr4fd = this.window || {};
+
+// Initialise namespace for current plugin
 this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
   // eslint-disable-next-line no-undef
   const xrm = Xrm;
@@ -7,6 +9,7 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
   //Dictionary containing logical names for entities and entity fields
   const logicalNames = {
     tables: {
+      case: "incident",
       contact: "contact",
     },
     caseFields: {
@@ -26,7 +29,7 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
   };
 
   //Dictionary of requirement level options for a control
-  const requirementLevels = {
+  const fieldRequirementLevels = {
     required: "required",
     optional: "none",
   };
@@ -41,17 +44,25 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
    *                                    available channels section is updated.
    */
   async function updateAvailableChannelsSection(executionContext) {
-    const formContext = executionContext.getFormContext();
-    const contact = await getContactRecord(formContext);
+    try {
+      _guardExecutionContextValid(executionContext);
+      const formContext = executionContext.getFormContext();
+      _guardFormContextIsValid(formContext);
 
-    const availableContactMethods = getContactMethodAvailability(contact);
-    updateContactQuickView(formContext, availableContactMethods);
-    updateCaseEmailField(formContext, availableContactMethods);
+      const contact = await _getContactRecordFromContactField(formContext);
+      const availableContactMethods = _getContactMethodAvailability(contact);
+
+      _updateContactQuickView(formContext, availableContactMethods);
+      _updateCaseEmailField(formContext, availableContactMethods);
+    } catch (error) {
+      console.error(error);
+      _notifyUserOfError(error);
+    }
   }
 
   // Fetch the contact record from the contact lookup field. Returns null if the
   // contact field is not populated
-  async function getContactRecord(formContext) {
+  async function _getContactRecordFromContactField(formContext) {
     const contactFieldValue = formContext
       .getAttribute(logicalNames.caseFields.contact)
       .getValue();
@@ -61,26 +72,38 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
 
     const contactId = contactFieldValue[0].id;
 
-    const contact = await xrm.WebApi.retrieveRecord(
-      logicalNames.tables.contact,
-      contactId,
-      getSelectsQueryStringForContact()
-    );
-    return contact;
+    return await _tryRetrieveContactRecordById(contactId);
+  }
+
+  async function _tryRetrieveContactRecordById(contactId) {
+    try {
+      return await xrm.WebApi.retrieveRecord(
+        logicalNames.tables.contact,
+        contactId,
+        _getSelectsQueryStringForContact()
+      );
+    } catch (error) {
+      console.error(error);
+      throw new Error(
+        "The form may not behave as expected Please reload the form. If the " +
+          "problem persists contact an administrator"
+      );
+    }
   }
 
   // Updates the contact quick view. If there are no available communication
   // channeld the view is hidden. Else, a field will be shown within the view
   // for each available contact channel.
-  function updateContactQuickView(formContext, availableContactMethods) {
-    const contactControls = getContactViewControls(formContext);
+  function _updateContactQuickView(formContext, availableContactMethods) {
+    const contactControls = _getContactViewControls(formContext);
 
-    contactControls?.quickViewControl?.setVisible(
-      availableContactMethods?.mobilePhone ||
-        availableContactMethods?.emailAddress
+    contactControls.quickViewControl.setVisible(
+      availableContactMethods.mobilePhone ||
+        availableContactMethods.emailAddress
     );
 
-    contactControls?.mobilePhoneControl?.setVisible(
+    // Note, the controls will be null if no values are present
+    contactControls.mobilePhoneControl?.setVisible(
       availableContactMethods.mobilePhone
     );
     contactControls.emailControl?.setVisible(
@@ -91,14 +114,14 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
   // Updates the email field on the case form. This will be shown and made
   // mandatory where no communication channels can be found for a contact. Else,
   // it is hidden and optional
-  function updateCaseEmailField(formContext, availableContactMethods) {
+  function _updateCaseEmailField(formContext, availableContactMethods) {
     const isNoContactCommunicationChannelsAvailable =
       !availableContactMethods?.mobilePhone &&
       !availableContactMethods?.emailAddress;
 
     const requiredLevel = isNoContactCommunicationChannelsAvailable
-      ? requirementLevels.required
-      : requirementLevels.optional;
+      ? fieldRequirementLevels.required
+      : fieldRequirementLevels.optional;
 
     formContext
       .getControl(logicalNames.caseFields.emailAddress)
@@ -109,38 +132,48 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
   }
 
   // Returns an object with references to the controls in the contact quick view
-  function getContactViewControls(formContext) {
-    const quickViewControl = formContext?.ui?.quickForms.get(
-      logicalNames.controls.contactAvailableMethodsQuickView
-    );
-    const mobilePhoneControl = quickViewControl?.getControl(
-      logicalNames.contactFields.mobilePhoneNumber
-    );
-    const emailControl = quickViewControl?.getControl(
-      logicalNames.contactFields.emailAddress
-    );
+  function _getContactViewControls(formContext) {
+    const quickViewControl = _tryReadContactQuickViewForm(formContext);
 
     return {
       quickViewControl,
-      mobilePhoneControl,
-      emailControl,
+      mobilePhoneControl: quickViewControl.getControl(
+        logicalNames.contactFields.mobilePhoneNumber
+      ),
+      emailControl: quickViewControl.getControl(
+        logicalNames.contactFields.emailAddress
+      ),
     };
+  }
+
+  function _tryReadContactQuickViewForm(formContext) {
+    const quickViewControl = formContext?.ui?.quickForms.get(
+      logicalNames.controls.contactAvailableMethodsQuickView
+    );
+    if (!quickViewControl) {
+      throw new Error(
+        "Invalid form configuration: Form must contain a contact quick view " +
+          "form with the name " +
+          `"${logicalNames.controls.contactAvailableMethodsQuickView}"`
+      );
+    }
+    return quickViewControl;
   }
 
   // Returns an object with keys for each channel and bool values indicating
   // whether the channel is available.
-  function getContactMethodAvailability(contact) {
+  function _getContactMethodAvailability(contact) {
     const availability = {
       mobilePhone: false,
       emailAddress: false,
     };
 
     if (contact) {
-      availability.mobilePhone = isContactMethodAvailable(
+      availability.mobilePhone = _isContactMethodAvailable(
         contact[logicalNames.contactFields.mobilePhoneNumber],
         contact[logicalNames.contactFields.doNotPhone]
       );
-      availability.emailAddress = isContactMethodAvailable(
+      availability.emailAddress = _isContactMethodAvailable(
         contact[logicalNames.contactFields.emailAddress],
         contact[logicalNames.contactFields.doNotEmail]
       );
@@ -152,7 +185,7 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
   // Returns a bool indicating whether a channel is available. Checks that the
   // channel has a value and that the related preferences allow contact through
   // this channel
-  function isContactMethodAvailable(channelValue, doNotContactPreference) {
+  function _isContactMethodAvailable(channelValue, doNotContactPreference) {
     if (
       !channelValue ||
       typeof channelValue !== "string" ||
@@ -166,7 +199,7 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
 
   // Build a selects query string for a contact record to return details needed
   // to identify which communication channels are available
-  function getSelectsQueryStringForContact(isNested) {
+  function _getSelectsQueryStringForContact(isNested) {
     var prefix = isNested ? "" : "?";
     var fields = [
       logicalNames.contactFields.emailAddress,
@@ -175,6 +208,77 @@ this.cr4fd.caseFormAvailableCommunicationChannelsUpdate = (function () {
       logicalNames.contactFields.doNotPhone,
     ];
     return prefix + "$select=" + fields.join(",");
+  }
+
+  function _guardExecutionContextValid(executionContext) {
+    const errorHandler = (message) => {
+      throw new Error(`Invalid execution context: ${message}`);
+    };
+    _guardExecutionContextPresent(executionContext, errorHandler);
+    _guardFormContextAccessible(executionContext, errorHandler);
+  }
+
+  // Calls the error handler with error detail if execution context is null
+  function _guardExecutionContextPresent(executionContext, errorHandler) {
+    if (!executionContext) {
+      errorHandler(
+        "The execution context must be passed as the first parameter"
+      );
+    }
+  }
+
+  // Calls the error handler with error detail if formContext is not accessible
+  // from the execution context
+  function _guardFormContextAccessible(executionContext, errorHandler) {
+    if (typeof executionContext?.getFormContext !== "function") {
+      errorHandler(
+        "getFormContext is not accessible from the execution context. Ensure " +
+          "that execution context is passed as the first parameter"
+      );
+    }
+  }
+
+  function _guardFormContextIsValid(formContext) {
+    _guardFormIsAssociatedWithCaseEntity(formContext);
+    _guardFieldIsPresentInForm(formContext, logicalNames.caseFields.contact);
+    _guardFieldIsPresentInForm(
+      formContext,
+      logicalNames.caseFields.emailAddress
+    );
+  }
+
+  // Calls the error handler with error detail if the form is not associated
+  // with the case form
+  function _guardFormIsAssociatedWithCaseEntity(formContext) {
+    if (
+      formContext?.contextToken?.entityTypeName !== logicalNames.tables.case
+    ) {
+      throw new Error(
+        "Invalid form configuration: Form must be associated with" +
+          `${logicalNames.tables.case} entity`
+      );
+    }
+  }
+
+  // Calls the error handler with error detail if the form does not contain the
+  // contact field
+  function _guardFieldIsPresentInForm(formContext, fieldLogicalName) {
+    const necessaryField = formContext.getAttribute(fieldLogicalName);
+    if (!necessaryField) {
+      throw new Error(
+        "Invalid form configuration: Form must contain " +
+          `${fieldLogicalName} field`
+      );
+    }
+  }
+
+  // Displays an error to the user with a message
+  function _notifyUserOfError(error) {
+    const plugInName = updateAvailableChannelsSection.name;
+    xrm.Navigation.openErrorDialog({
+      message: `${plugInName} has encountered an error. ${error.message}`,
+      details: error.stack,
+    });
   }
 
   //Return the API
