@@ -24,8 +24,7 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
   };
 
   /**
-   * Populates the contact field on the case form when the customer field
-   * changes.
+   * Populates the contact field on the case form using the customer field.
    *
    * @param {Object} executionContext   The execution context provided by the
    *                                    form event.
@@ -33,14 +32,20 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
    *                                    field is populated
    */
   async function populateContactOnCustomerChange(executionContext) {
-    _guardThatExecutionContextIsNotNull(executionContext);
+    try {
+      _validateExecutionContext(executionContext);
+      const formContext = executionContext.getFormContext();
+      _validateFormContext(formContext);
 
-    const formContext = executionContext.getFormContext();
-    _guardThatFormIsAssociatedWithTheCaseEntity(formContext);
+      const contact = await _getContactLookupValueFromCustomerField(
+        formContext
+      );
 
-    const contact = await _getContactLookupValueFromCustomerField(formContext);
-
-    _setCaseContactField(formContext, contact);
+      _setCaseContactField(formContext, contact);
+    } catch (error) {
+      console.error(error);
+      _notifyUserOfError(error);
+    }
   }
 
   // This function is responsible for returning a lookup value for a contact
@@ -112,38 +117,80 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
     const contactField = formContext.getAttribute(
       logicalNames.caseFields.contact
     );
-    _guardThatContactFieldIsNotNull(contactField);
     contactField.setValue(contactLookup);
     contactField.fireOnChange();
   }
 
-  // Throws an error if execution context is null
-  function _guardThatExecutionContextIsNotNull(executionContext) {
-    if (executionContext === null) {
-      throw new Error(
+  // Validate that the execution context is valid and contains a getFormContext
+  // method. Errors thrown are left to the global handler
+  function _validateExecutionContext(executionContext) {
+    const errorHandler = (message) => {
+      throw new Error(`Invalid execution context: ${message}`);
+    };
+    _guardExecutionContextPresent(executionContext, errorHandler);
+    _guardFormContextAccessible(executionContext, errorHandler);
+  }
+
+  // Calls the error handler with error detail if execution context is null
+  function _guardExecutionContextPresent(executionContext, errorHandler) {
+    if (!executionContext) {
+      errorHandler(
         "The execution context must be passed as the first parameter"
       );
     }
   }
 
-  // Throws an error if form context is null or associated with an entity other
-  // than case/incident
-  function _guardThatFormIsAssociatedWithTheCaseEntity(formContext) {
-    if (
-      !formContext ||
-      formContext.contextToken?.entityTypeName !== logicalNames.tables.case
-    ) {
-      throw new Error(
-        "Invalid form: This handler should only be used on a case table form"
+  // Calls the error handler with error detail if formContext is not accessible
+  // from the execution context
+  function _guardFormContextAccessible(executionContext, errorHandler) {
+    if (typeof executionContext?.getFormContext !== "function") {
+      errorHandler(
+        "getFormContext is not accessible from the execution context. Ensure " +
+          "that execution context is passed as the first parameter"
       );
     }
   }
 
-  // Throws an error if the contact field cannot be found on the form
-  function _guardThatContactFieldIsNotNull(contactField) {
-    if (contactField === null) {
-      throw new Error("The contact field must be present in the form");
+  // Validates that the form context relates to the case entity and that the
+  // contact field is present
+  function _validateFormContext(formContext) {
+    const errorHandler = (message) => {
+      throw new Error(`Invalid form configuration: ${message}`);
+    };
+    _guardFormIsAssociatedWithTheCaseEntity(formContext, errorHandler);
+    _guardContactControlIsPresent(formContext, errorHandler);
+  }
+
+  // Calls the error handler with error detail if the form is not associated
+  // with the case form
+  function _guardFormIsAssociatedWithTheCaseEntity(formContext, errorHandler) {
+    if (
+      formContext?.contextToken?.entityTypeName !== logicalNames.tables.case
+    ) {
+      errorHandler(
+        `Form must be associated with ${logicalNames.tables.case} entity`
+      );
     }
+  }
+
+  // Calls the error handler with error detail if the form does not contain the
+  // contact field
+  function _guardContactControlIsPresent(formContext, errorHandler) {
+    const contactField = formContext.getAttribute(
+      logicalNames.caseFields.contact
+    );
+    if (!contactField) {
+      errorHandler("The contact field control must be present in the form");
+    }
+  }
+
+  // Displays an error to the user with a message
+  function _notifyUserOfError(error) {
+    const plugInName = populateContactOnCustomerChange.name;
+    xrm.Navigation.openErrorDialog({
+      message: `${plugInName} has encountered an error. ${error.message}`,
+      details: error.stack,
+    });
   }
 
   //Return the API
