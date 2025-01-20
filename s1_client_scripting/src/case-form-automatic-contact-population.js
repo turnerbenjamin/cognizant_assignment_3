@@ -34,8 +34,7 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
   async function populateContactOnCustomerChange(executionContext) {
     try {
       _guardExecutionContextPassed(executionContext);
-
-      const formContext = _tryReadValidFormContextOrThrow(formContext);
+      const formContext = _tryReadValidFormContextOrThrow(executionContext);
 
       const contact = await _getContactLookupValueFromCustomerField(
         formContext
@@ -191,6 +190,7 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
     };
     _guardFormIsAssociatedWithTheCaseEntity(formContext, errorHandler);
     _guardContactControlIsPresent(formContext, errorHandler);
+    return formContext;
   }
 
   /**
