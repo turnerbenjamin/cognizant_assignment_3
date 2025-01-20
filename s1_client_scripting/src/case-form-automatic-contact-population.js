@@ -1,10 +1,12 @@
+"use strict";
+
 this.cr4fd = this.window || {};
 this.cr4fd.caseFormAutomaticContactPopulation = (function () {
   // eslint-disable-next-line no-undef
-  const xrm = Xrm;
+  const _xrm = Xrm;
 
   //Dictionary containing logical names for entities and entity fields
-  const logicalNames = {
+  const _logicalNames = {
     tables: {
       account: "account",
       contact: "contact",
@@ -24,18 +26,16 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
   };
 
   /**
-   * Populates the contact field on the case form using the customer field.
+   * Populate the contact field in a case form using the value from the customer
+   * field.
    *
-   * @param {Object} executionContext   The execution context provided by the
-   *                                    form event.
-   * @returns {Promise<void>}           A promise that resolves when the contact
-   *                                    field is populated
+   * @param {Object} executionContext  Execution context from a form event
    */
   async function populateContactOnCustomerChange(executionContext) {
     try {
-      _validateExecutionContext(executionContext);
-      const formContext = executionContext.getFormContext();
-      _validateFormContext(formContext);
+      _guardExecutionContextPassed(executionContext);
+
+      const formContext = _tryReadValidFormContextOrThrow(formContext);
 
       const contact = await _getContactLookupValueFromCustomerField(
         formContext
@@ -48,20 +48,25 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
     }
   }
 
-  // This function is responsible for returning a lookup value for a contact
-  // based on the customer field. If the customer field references an account
-  // entity, a function is called to extract the primary contact where one
-  // exists. If the customer field is null or contains a contact, the value of
-  // the customer field is simply returned
+  /**
+   * Retrieve the lookup value for a contact based on the customer field.
+   * If the customer field references an account entity, it extracts the primary
+   * contact where one exists. If the customer field is null or contains a
+   * contact, the value of the customer field is simply returned.
+   *
+   * @param {Object} formContext  The form context object.
+   * @returns {Promise<Object>}   A promise that resolves to the contact
+   *                              lookup value.
+   */
   async function _getContactLookupValueFromCustomerField(formContext) {
     const customerFieldValue = formContext
-      .getAttribute(logicalNames.caseFields.customer)
+      .getAttribute(_logicalNames.caseFields.customer)
       .getValue();
 
     if (
       customerFieldValue &&
       customerFieldValue.length > 0 &&
-      customerFieldValue[0].entityType === logicalNames.tables.account
+      customerFieldValue[0].entityType === _logicalNames.tables.account
     ) {
       const accountId = customerFieldValue[0].id;
       return await _getPrimaryContactLookupValueFromAccount(accountId);
@@ -69,91 +74,118 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
     return customerFieldValue;
   }
 
-  // Fetches an account and returns a lookup value for its primary contact. If
-  // the account is not found or the primary contact is not populated, null is
-  // returned
+  /**
+   * Retrieves the primary contact lookup value from an account record. Returns
+   * null if the primary contact field is not populated
+   *
+   * @param {string} accountId  The ID of the account to retrieve the primary
+   *                            contact from.
+   * @returns {Promise<Object|null>}  A promise that resolves to the primary
+   *                                  contact lookup value.
+   * @throws {Error}  If there is an error retrieving the account record.
+   */
   async function _getPrimaryContactLookupValueFromAccount(accountId) {
-    const account = await xrm.WebApi.retrieveRecord(
-      logicalNames.tables.account,
-      accountId,
-      _getSelectsQueryStringForPrimaryContact()
-    );
-    return _buildPrimaryContactLookupFromAccountRecord(account);
-  }
-
-  // Formats the primary contact field of an account record as a contact lookup
-  // value. Returns null if the accountRecord or primary contact field are null
-  function _buildPrimaryContactLookupFromAccountRecord(accountRecord) {
-    const contact =
-      accountRecord && accountRecord[logicalNames.accountFields.primaryContact];
-
-    if (!contact) {
-      return null;
+    try {
+      const account = await _xrm.WebApi.retrieveRecord(
+        _logicalNames.tables.account,
+        accountId,
+        _buildSelectsQueryStringForPrimaryContact()
+      );
+      return _buildPrimaryContactLookupFromAccountRecord(account);
+    } catch (error) {
+      console.error(error);
+      throw new Error(
+        "The form may not behave as expected Please reload the form. If the " +
+          "problem persists contact an administrator"
+      );
     }
-
-    return [
-      {
-        id: contact[logicalNames.contactFields.id],
-        name: contact[logicalNames.contactFields.fullname],
-        entityType: logicalNames.tables.contact,
-      },
-    ];
   }
 
-  //Build a query string to fetch and expand the primary contact from an
-  // account record
-  function _getSelectsQueryStringForPrimaryContact() {
+  /**
+   * Builds a query string to fetch and expand the primary contact from an
+   * account record. The query string includes the primary contact and selects
+   * the full name field of the contact.
+   *
+   * @returns {string} The query string to fetch and expand the primary contact.
+   */
+  function _buildSelectsQueryStringForPrimaryContact() {
     return (
       "?$expand=" +
-      logicalNames.accountFields.primaryContact +
+      _logicalNames.accountFields.primaryContact +
       "($select=" +
-      logicalNames.contactFields.fullname +
+      _logicalNames.contactFields.fullname +
       ")"
     );
   }
 
-  //Set the contact field to the contact lookup value provided
+  /**
+   * Format the expanded primary contact field of an account record as a contact
+   * lookup value. Returns undefined if the account record or primary contact
+   * field are null.
+   *
+   * @param {Object} accountRecord  The account record containing the primary
+   *                                contact field.
+   * @returns {Object|null}  A contact lookup object with id, name, and
+   *                         entityType properties, or null if no primary
+   *                         contact is found.
+   */
+  function _buildPrimaryContactLookupFromAccountRecord(accountRecord) {
+    const contact =
+      accountRecord &&
+      accountRecord[_logicalNames.accountFields.primaryContact];
+
+    if (contact) {
+      return [
+        {
+          id: contact[_logicalNames.contactFields.id],
+          name: contact[_logicalNames.contactFields.fullname],
+          entityType: _logicalNames.tables.contact,
+        },
+      ];
+    }
+  }
+
+  /**
+   * Sets the contact field on the case form to the provided contact lookup
+   * value.
+   *
+   * @param {Object} formContext  The form context object.
+   * @param {Object} contactLookup  The lookup value for the contact to be set.
+   */
   function _setCaseContactField(formContext, contactLookup) {
     const contactField = formContext.getAttribute(
-      logicalNames.caseFields.contact
+      _logicalNames.caseFields.contact
     );
     contactField.setValue(contactLookup);
     contactField.fireOnChange();
   }
 
-  // Validate that the execution context is valid and contains a getFormContext
-  // method. Errors thrown are left to the global handler
-  function _validateExecutionContext(executionContext) {
-    const errorHandler = (message) => {
-      throw new Error(`Invalid execution context: ${message}`);
-    };
-    _guardExecutionContextPresent(executionContext, errorHandler);
-    _guardFormContextAccessible(executionContext, errorHandler);
-  }
-
-  // Calls the error handler with error detail if execution context is null
-  function _guardExecutionContextPresent(executionContext, errorHandler) {
-    if (!executionContext) {
-      errorHandler(
-        "The execution context must be passed as the first parameter"
-      );
-    }
-  }
-
-  // Calls the error handler with error detail if formContext is not accessible
-  // from the execution context
-  function _guardFormContextAccessible(executionContext, errorHandler) {
+  /**
+   * Validates that the execution context is defined and contains a
+   * getFormContext method.
+   *
+   * @param {Object} executionContext  The execution context to validate.
+   * @throws {Error}  Throws an error if the execution context is invalid or
+   *                  does not contain a getFormContext method.
+   */
+  function _guardExecutionContextPassed(executionContext) {
     if (typeof executionContext?.getFormContext !== "function") {
-      errorHandler(
-        "getFormContext is not accessible from the execution context. Ensure " +
-          "that execution context is passed as the first parameter"
+      throw new Error(
+        "Invalid execution context. Ensure that execution context is passed " +
+          "as the first parameter"
       );
     }
   }
 
-  // Validates that the form context relates to the case entity and that the
-  // contact field is present
-  function _validateFormContext(formContext) {
+  /**
+   * Reads and validates the form context from the execution context.
+   *
+   * @param {Object} executionContext  The execution context
+   * @throws {Error}  Throws an error if the form is not associated with the
+   *                  case entity or is missing the contact control
+   */
+  function _tryReadValidFormContextOrThrow(executionContext) {
+    const formContext = executionContext.getFormContext();
     const errorHandler = (message) => {
       throw new Error(`Invalid form configuration: ${message}`);
     };
@@ -161,39 +193,56 @@ this.cr4fd.caseFormAutomaticContactPopulation = (function () {
     _guardContactControlIsPresent(formContext, errorHandler);
   }
 
-  // Calls the error handler with error detail if the form is not associated
-  // with the case form
+  /**
+   * Validates that the form is associated with the case entity. Calls the error
+   * handler if the form is not associated with the contact entity
+   *
+   * @param {Object} formContext  The form context
+   * @param {Function} errorHandler  The function to call with an error message
+   *                                 if validation fails
+   */
   function _guardFormIsAssociatedWithTheCaseEntity(formContext, errorHandler) {
     if (
-      formContext?.contextToken?.entityTypeName !== logicalNames.tables.case
+      formContext?.contextToken?.entityTypeName !== _logicalNames.tables.case
     ) {
       errorHandler(
-        `Form must be associated with ${logicalNames.tables.case} entity`
+        `Form must be associated with ${_logicalNames.tables.case} entity`
       );
     }
   }
 
-  // Calls the error handler with error detail if the form does not contain the
-  // contact field
+  /**
+   * Validates that the form contains the contact field control. Calls the error
+   * handler if this control is missing
+   *
+   * @param {Object} formContext  The form context
+   * @param {Function} errorHandler  The function to call with an error message
+   *                                 if validation fails
+   */
   function _guardContactControlIsPresent(formContext, errorHandler) {
     const contactField = formContext.getAttribute(
-      logicalNames.caseFields.contact
+      _logicalNames.caseFields.contact
     );
     if (!contactField) {
       errorHandler("The contact field control must be present in the form");
     }
   }
 
-  // Displays an error to the user with a message
+  /**
+   * Displays an error dialog to the user with a specified error message and
+   * details.
+   *
+   * @param {Error} error  The error object to display
+   */
   function _notifyUserOfError(error) {
     const plugInName = populateContactOnCustomerChange.name;
-    xrm.Navigation.openErrorDialog({
+    _xrm.Navigation.openErrorDialog({
       message: `${plugInName} has encountered an error. ${error.message}`,
       details: error.stack,
     });
   }
 
-  //Return the API
+  // Return the API
   return {
     populateContactOnCustomerChange,
   };
