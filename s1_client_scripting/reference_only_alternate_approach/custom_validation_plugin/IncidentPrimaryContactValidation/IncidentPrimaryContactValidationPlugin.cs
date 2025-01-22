@@ -33,15 +33,8 @@ namespace IncidentPrimaryContactValidation
             ValidateContactField(caseAfterCreateOrUpdate, service);
         }
 
-        /// <summary>
-        ///     Reads the target value from the plugin context and returns it as
-        ///     a Case object.
-        /// </summary>
-        /// <param name="context">The plugin execution context.</param>
-        /// <returns>A Case object representing the target entity.</returns>
-        /// <exception cref="ArgumentException">
-        ///     Thrown when the target is null.
-        /// </exception>
+        // Update the preEntityImage with updates from context so that it
+        // reflects the post create/update state
         private Case GetCaseAfterCreateOrUpdate(
             Case preEntityImage,
             IPluginExecutionContext context
@@ -67,6 +60,8 @@ namespace IncidentPrimaryContactValidation
             return preEntityImage;
         }
 
+        // Fetch the pre entity image and cast to case. If no image exists
+        // a case is returned with null properties
         private Case GetPreEntityImage(IPluginExecutionContext context)
         {
             if (context.PreEntityImages.TryGetValue(_preEntityImageAlias, out Entity entity))
@@ -76,6 +71,9 @@ namespace IncidentPrimaryContactValidation
             return new Case();
         }
 
+        // Ensures that the value in the contact field is associated with the
+        // value in the customer field where both fields have been set and the
+        // record in the customer field is an account.
         private void ValidateContactField(Case targetCase, IOrganizationService service)
         {
             // Retrieve the contact and customer values from the Case entity
@@ -116,15 +114,7 @@ namespace IncidentPrimaryContactValidation
             }
         }
 
-        /// <summary>
-        ///     Ensures that the local plugin context is not null.
-        /// </summary>
-        /// <param name="localPluginContext">
-        ///     The local plugin context to check.
-        /// </param>
-        /// <exception cref="ArgumentNullException">
-        ///     Thrown when the local plugin context is null.
-        /// </exception>
+        // Throws an error if the localPluginContext is null
         private void GuardLocalPluginContextIsNotNull(ILocalPluginContext localPluginContext)
         {
             if (localPluginContext == null)
