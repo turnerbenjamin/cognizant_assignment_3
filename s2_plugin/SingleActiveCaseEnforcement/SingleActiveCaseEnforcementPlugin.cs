@@ -53,7 +53,7 @@ namespace SingleActiveCaseEnforcement
                 throw new ArgumentException("Target is null");
             }
 
-            return (Case)entity;
+            return Case.CreateFromEntityOrThrow(entity);
         }
 
         // Check that the customer associated with the target case has no
@@ -135,7 +135,8 @@ namespace SingleActiveCaseEnforcement
             {
                 return null;
             }
-            return (Case)result.Entities.First();
+            var caseEntity = result.Entities.First();
+            return Case.CreateFromEntityOrThrow(caseEntity);
         }
 
         // Throws if local plugin context is null.

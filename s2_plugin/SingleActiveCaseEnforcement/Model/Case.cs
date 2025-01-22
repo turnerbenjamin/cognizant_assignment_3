@@ -15,17 +15,12 @@ namespace SingleActiveCaseEnforcement.Model
         public OptionSetValue Status { get; }
 
         /// <summary>
-        ///     Initialises a new instance of the <see cref="Case"/> class.
+        /// Initializes a new instance of the Case class using the provided Entity object.
         /// </summary>
-        /// <param name="caseEntity">The entity representing the case.</param>
-        /// <exception cref="ArgumentNullException">
-        ///     Thrown when the case entity is null.
-        /// </exception>
-        /// <exception cref="ArgumentException">
-        ///     Thrown when the case entity does not have the correct logical
-        ///     name.
-        /// </exception>
-        public Case(Entity caseEntity)
+        /// <param name="caseEntity">The Entity object representing a case.</param>
+        /// <exception cref="ArgumentNullException">Thrown when the entity is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the entity does not have the correct logical name.</exception>
+        private Case(Entity caseEntity)
         {
             GuardEntityIsNotNull(caseEntity);
             GuardEntityHasTheCorrectType(caseEntity);
@@ -39,8 +34,22 @@ namespace SingleActiveCaseEnforcement.Model
             );
         }
 
-        // Explicit casting of an entity to a case
-        public static explicit operator Case(Entity caseEntity)
+        /// <summary>
+        /// Creates a new Case instance from the provided Entity object.
+        /// </summary>
+        /// <param name="caseEntity">
+        /// The Entity object representing a case.
+        /// </param>
+        /// <returns>
+        /// A new Case instance initialized with the entity's attributes.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">
+        /// Thrown when the entity is null.
+        /// </exception>
+        /// <exception cref="ArgumentException">
+        /// Thrown when the entity does not have the correct logical name.
+        /// </exception>
+        public static Case CreateFromEntityOrThrow(Entity caseEntity)
         {
             return new Case(caseEntity);
         }
