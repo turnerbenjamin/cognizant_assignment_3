@@ -28,15 +28,10 @@ namespace SingleActiveCaseEnforcement
 
             var context = localPluginContext.PluginExecutionContext;
             var service = localPluginContext.PluginUserService;
-            var tracingService = localPluginContext.TracingService;
 
             var targetCase = ReadTargetCase(context);
 
-            GuardThatCustomerHasNoActiveCases(
-                targetCase,
-                service,
-                tracingService
-            );
+            GuardThatCustomerHasNoActiveCases(targetCase, service);
         }
 
         // Read the target value from the plugin and cast to a case. Throws
@@ -61,15 +56,9 @@ namespace SingleActiveCaseEnforcement
         // InvalidPluginExecutionException to be displayed to the user.
         private void GuardThatCustomerHasNoActiveCases(
             Case targetCase,
-            IOrganizationService service,
-            ITracingService tracingService
+            IOrganizationService service
         )
         {
-            tracingService.Trace(
-                $"Fetching active case records for customer: "
-                    + targetCase.Customer.Id
-            );
-
             var currentlyActiveCaseForCustomer =
                 RetrieveActiveCaseForCustomerOrNull(
                     targetCase.Customer.Id,
@@ -83,9 +72,6 @@ namespace SingleActiveCaseEnforcement
                         + currentlyActiveCaseForCustomer.Title
                 );
             }
-            tracingService.Trace(
-                $"No active cases found for customer: " + targetCase.Customer.Id
-            );
         }
 
         // Look for an active case associated with the given customer ID.
