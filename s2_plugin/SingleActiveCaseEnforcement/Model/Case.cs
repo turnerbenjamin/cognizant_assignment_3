@@ -39,29 +39,13 @@ namespace SingleActiveCaseEnforcement.Model
             );
         }
 
-        /// <summary>
-        ///     Explicit casting of an entity to a case
-        /// </summary>
-        /// <param name="caseEntity">The entity representing the case.</param>
-        /// <exception cref="ArgumentNullException">
-        ///     Thrown when the case entity is null.
-        /// </exception>
-        /// <exception cref="ArgumentException">
-        ///     Thrown when the case entity does not have the correct logical
-        ///     name.
-        /// </exception>
+        // Explicit casting of an entity to a case
         public static explicit operator Case(Entity caseEntity)
         {
             return new Case(caseEntity);
         }
 
-        /// <summary>
-        ///     Ensures the entity is not null.
-        /// </summary>
-        /// <param name="entity">The entity to check.</param>
-        /// <exception cref="ArgumentNullException">
-        ///     Thrown when the entity is null.
-        /// </exception>
+        // Ensures the entity is not null.
         private void GuardEntityIsNotNull(Entity entity)
         {
             if (entity is null)
@@ -73,13 +57,7 @@ namespace SingleActiveCaseEnforcement.Model
             }
         }
 
-        /// <summary>
-        /// Ensures the entity has the correct logical name.
-        /// </summary>
-        /// <param name="entity">The entity to check.</param>
-        /// <exception cref="ArgumentException">
-        ///     Thrown when the entity does not have the correct logical name.
-        /// </exception>
+        // Ensures the entity has the correct logical name.
         private void GuardEntityHasTheCorrectType(Entity entity)
         {
             if (entity.LogicalName != EntityLogicalName)
