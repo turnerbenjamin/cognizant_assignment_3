@@ -34,13 +34,15 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
   /**
    * If the customer field contains an account, and that account has a primary
    * contact. This handler will populate the contact field with the primary
-   * account
+   * account. If the customer is a contact or null the contact field will be set
+   * to null
    *
-   * @param {Object} executionContext  Execution context from a form event
+   * @param {Object} executionContext  Execution context passed as a first
+   *                                   parameter for a form event
    */
   async function populateContactOnCustomerChange(executionContext) {
     try {
-      _guardExecutionContextPassed(executionContext);
+      _guardExecutionContextIsValid(executionContext);
       const formContext = _tryReadValidFormContextOrThrow(executionContext);
 
       const contact = await _getContactLookupValueFromCustomerField(
@@ -55,17 +57,18 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
   }
 
   /**
-   * Updates the visibility and requirement level of the contact control based
-   * on the value of the customer field.
+   * Updates the visibility and requirement level of the contact control in a
+   * case form based on the value of the customer field.
    *
    * If the customer is a contact the field is hidden, else it is visible
    * If the customer is an account the field is required, else it is optional
    *
-   * @param {Object} executionContext  Execution context from a form event
+   * @param {Object} executionContext  Execution context passed as a first
+   *                                   parameter for a form event
    */
   async function updateContactField(executionContext) {
     try {
-      _guardExecutionContextPassed(executionContext);
+      _guardExecutionContextIsValid(executionContext);
       const formContext = _tryReadValidFormContextOrThrow(executionContext);
 
       _updateContactFieldControl(formContext);
@@ -82,7 +85,7 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
    *
    * @param {Object} formContext  The form context object.
    * @returns {Promise<Object|null>}   A promise that resolves to the contact
-   *                              lookup value.
+   *                                   lookup value.
    */
   async function _getContactLookupValueFromCustomerField(formContext) {
     const customerFieldValue = _readCustomerField(formContext);
@@ -105,20 +108,12 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
    * @throws {Error}  If there is an error retrieving the account record.
    */
   async function _getPrimaryContactLookupValueFromAccount(accountId) {
-    try {
-      const account = await _xrm.WebApi.retrieveRecord(
-        _logicalNames.tables.account,
-        accountId,
-        _buildSelectsQueryStringForPrimaryContact()
-      );
-      return _buildPrimaryContactLookupFromAccountRecord(account);
-    } catch (error) {
-      console.error(error);
-      throw new Error(
-        "The form may not behave as expected Please reload the form. If the " +
-          "problem persists contact an administrator"
-      );
-    }
+    const account = await _xrm.WebApi.retrieveRecord(
+      _logicalNames.tables.account,
+      accountId,
+      _buildSelectsQueryStringForPrimaryContact()
+    );
+    return _buildPrimaryContactLookupFromAccountRecord(account);
   }
 
   /**
@@ -162,6 +157,7 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
         },
       ];
     }
+    return null;
   }
 
   /**
@@ -216,7 +212,8 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
   /**
    * Sets the requirement level of the contact field on the case form.
    *
-   * @param {Object} formContext  The form context object.
+   * @param {Object} formContext  A valid form context containing the contact
+   *                              control
    * @param {boolean} isRequired  A boolean indicating whether the contact
    *                               field should be required
    */
@@ -228,7 +225,6 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
     const contactAttribute = formContext.getAttribute(
       _logicalNames.caseFields.contact
     );
-
     contactAttribute.setRequiredLevel(requiredLevel);
   }
 
@@ -258,7 +254,7 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
    * @throws {Error}  Throws an error if the execution context is invalid or
    *                  does not contain a getFormContext method
    */
-  function _guardExecutionContextPassed(executionContext) {
+  function _guardExecutionContextIsValid(executionContext) {
     if (typeof executionContext?.getFormContext !== "function") {
       throw new Error(
         "Invalid execution context. Ensure that execution context is passed " +
@@ -271,16 +267,18 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
    * Reads and validates the form context from the execution context.
    *
    * @param {Object} executionContext  The execution context
-   * @throws {Error}  Throws an error if the form is not associated with the
-   *                  case entity or is missing the contact control
+   * @throws {Error}  Throws an error the form is not associated with the case
+   *                  entity or is missing the contact control
    */
   function _tryReadValidFormContextOrThrow(executionContext) {
-    const formContext = executionContext.getFormContext();
+    const formContext = executionContext?.getFormContext();
     const errorHandler = (message) => {
       throw new Error(`Invalid form configuration: ${message}`);
     };
+
     _guardFormIsAssociatedWithTheCaseEntity(formContext, errorHandler);
     _guardContactControlIsPresent(formContext, errorHandler);
+
     return formContext;
   }
 
@@ -311,7 +309,7 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
    *                                 if validation fails
    */
   function _guardContactControlIsPresent(formContext, errorHandler) {
-    const contactField = formContext.getControl(
+    const contactField = formContext?.getControl(
       _logicalNames.caseFields.contact
     );
     if (!contactField) {
@@ -326,7 +324,7 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
    * @param {Error} error  The error object to display
    */
   function _notifyUserOfError(error, handlerName) {
-    _xrm.Navigation.openErrorDialog({
+    _xrm?.Navigation?.openErrorDialog({
       message: `${handlerName} has encountered an error. ${error.message}`,
       details: error.stack,
     });

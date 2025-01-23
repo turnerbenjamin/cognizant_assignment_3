@@ -8,6 +8,8 @@ namespace SingleActiveCaseEnforcement
 {
     public class SingleActiveCaseEnforcementPlugin : PluginBase
     {
+        private readonly int _caseActiveStatusCode = 0;
+
         public SingleActiveCaseEnforcementPlugin()
             : base(typeof(SingleActiveCaseEnforcementPlugin)) { }
 
@@ -45,7 +47,9 @@ namespace SingleActiveCaseEnforcement
                 )
             )
             {
-                throw new ArgumentException("Target is null");
+                throw new ArgumentException(
+                    "Target is missing from context.InputParameters"
+                );
             }
 
             return Case.CreateFromEntityOrThrow(entity);
@@ -69,7 +73,7 @@ namespace SingleActiveCaseEnforcement
             {
                 throw new InvalidPluginExecutionException(
                     "An active case already exists for this customer: "
-                        + currentlyActiveCaseForCustomer.Title
+                        + $"({currentlyActiveCaseForCustomer.Title})"
                 );
             }
         }
@@ -97,12 +101,11 @@ namespace SingleActiveCaseEnforcement
             Guid customerId
         )
         {
-            const int caseActiveStatusCode = 0;
             var filterExpression = new FilterExpression();
             filterExpression.AddCondition(
                 Case.StatusFieldLogicalName,
                 ConditionOperator.Equal,
-                caseActiveStatusCode
+                _caseActiveStatusCode
             );
 
             filterExpression.AddCondition(
@@ -117,7 +120,7 @@ namespace SingleActiveCaseEnforcement
         // Case object. If the collection is empty, returns null.
         private Case GetFirstCaseFromCollectionOrNull(EntityCollection result)
         {
-            if (result is null || result.Entities.Count == 0)
+            if (result?.Entities.Count == 0)
             {
                 return null;
             }
