@@ -10,4 +10,4 @@
 # MSBuild Binary and Structured Log
 *.binlog
 
-*.snk
+**/*.snk
