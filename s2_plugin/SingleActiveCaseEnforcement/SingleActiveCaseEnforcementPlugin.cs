@@ -73,7 +73,7 @@ namespace SingleActiveCaseEnforcement
             {
                 throw new InvalidPluginExecutionException(
                     "An active case already exists for this customer: "
-                        + $"({currentlyActiveCaseForCustomer.Title})"
+                        + $"'{currentlyActiveCaseForCustomer.Title}'"
                 );
             }
         }

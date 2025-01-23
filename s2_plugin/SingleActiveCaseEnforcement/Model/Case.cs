@@ -15,23 +15,20 @@ namespace SingleActiveCaseEnforcement.Model
         public OptionSetValue Status { get; }
 
         /// <summary>
-        /// Initializes a new instance of the Case class using the provided Entity object.
+        /// Initialises a new instance of the <see cref="Case"/> class.
         /// </summary>
-        /// <param name="caseEntity">The Entity object representing a case.</param>
-        /// <exception cref="ArgumentNullException">Thrown when the entity is null.</exception>
-        /// <exception cref="ArgumentException">Thrown when the entity does not have the correct logical name.</exception>
-        private Case(Entity caseEntity)
+        /// <param name="title">The title of the case</param>
+        /// <param name="customer">The customer associated with the case</param>
+        /// <param name="status">The status of the case</param>
+        private Case(
+            string title,
+            EntityReference customer,
+            OptionSetValue status
+        )
         {
-            GuardEntityIsNotNull(caseEntity);
-            GuardEntityHasTheCorrectType(caseEntity);
-
-            Title = caseEntity.GetAttributeValue<string>(TitleFieldLogicalName);
-            Customer = caseEntity.GetAttributeValue<EntityReference>(
-                CustomerFieldLogicalName
-            );
-            Status = caseEntity.GetAttributeValue<OptionSetValue>(
-                StatusFieldLogicalName
-            );
+            Title = title;
+            Customer = customer;
+            Status = status;
         }
 
         /// <summary>
@@ -51,11 +48,24 @@ namespace SingleActiveCaseEnforcement.Model
         /// </exception>
         public static Case CreateFromEntityOrThrow(Entity caseEntity)
         {
-            return new Case(caseEntity);
+            GuardEntityIsNotNull(caseEntity);
+            GuardEntityHasTheCorrectType(caseEntity);
+
+            var title = caseEntity.GetAttributeValue<string>(
+                TitleFieldLogicalName
+            );
+            var customer = caseEntity.GetAttributeValue<EntityReference>(
+                CustomerFieldLogicalName
+            );
+            var status = caseEntity.GetAttributeValue<OptionSetValue>(
+                StatusFieldLogicalName
+            );
+
+            return new Case(title, customer, status);
         }
 
         // Ensures the entity is not null.
-        private void GuardEntityIsNotNull(Entity entity)
+        private static void GuardEntityIsNotNull(Entity entity)
         {
             if (entity is null)
             {
@@ -67,7 +77,7 @@ namespace SingleActiveCaseEnforcement.Model
         }
 
         // Ensures the entity has the correct logical name.
-        private void GuardEntityHasTheCorrectType(Entity entity)
+        private static void GuardEntityHasTheCorrectType(Entity entity)
         {
             if (entity.LogicalName != EntityLogicalName)
             {
