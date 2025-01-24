@@ -37,7 +37,7 @@ namespace SingleActiveCaseEnforcement
         }
 
         // Read the target value from the plugin and cast to a case. Throws
-        //  if target is null or the cast to case fails
+        // if target is null or the cast to case fails
         private Case ReadTargetCase(IPluginExecutionContext context)
         {
             if (
