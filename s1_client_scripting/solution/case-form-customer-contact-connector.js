@@ -32,9 +32,13 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
   };
 
   /**
+   * Case form handler, designed for use with the customer on change event.
+   *
    * If the customer field contains an account, and that account has a primary
    * contact. This handler will populate the contact field with the primary
-   * account. If the customer is a contact or null the contact field will be set
+   * account.
+   *
+   * If the customer is a contact or null the contact field will be set
    * to null
    *
    * @param {Object} executionContext  Execution context passed as a first
@@ -57,8 +61,11 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
   }
 
   /**
-   * Updates the visibility and requirement level of the contact control in a
-   * case form based on the value of the customer field.
+   * Case form event handler, designed for use with the case form on load and
+   * contact on change events.
+   *
+   * This handler, updates the visibility and requirement level of the contact
+   * control in a case form based on the value of the customer field.
    *
    * If the customer is a contact the field is hidden, else it is visible
    * If the customer is an account the field is required, else it is optional
@@ -111,7 +118,7 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
     const account = await _xrm.WebApi.retrieveRecord(
       _logicalNames.tables.account,
       accountId,
-      _buildSelectsQueryStringForPrimaryContact()
+      _buildSelectQueryStringForPrimaryContact()
     );
     return _buildPrimaryContactLookupFromAccountRecord(account);
   }
@@ -122,7 +129,7 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
    *
    * @returns {string} The query string to fetch and expand the primary contact.
    */
-  function _buildSelectsQueryStringForPrimaryContact() {
+  function _buildSelectQueryStringForPrimaryContact() {
     return (
       "?$expand=" +
       _logicalNames.accountFields.primaryContact +
@@ -134,8 +141,8 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
 
   /**
    * Format the expanded primary contact field of an account record as a contact
-   * lookup value. Returns undefined if the account record or primary contact
-   * field are null.
+   * lookup value. Returns bull if the account record or primary contact field
+   * are null.
    *
    * @param {Object} accountRecord  The account record containing the primary
    *                                contact field.
@@ -148,16 +155,17 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
       accountRecord &&
       accountRecord[_logicalNames.accountFields.primaryContact];
 
-    if (contact) {
-      return [
-        {
-          id: contact[_logicalNames.contactFields.id],
-          name: contact[_logicalNames.contactFields.fullname],
-          entityType: _logicalNames.tables.contact,
-        },
-      ];
+    if (!contact) {
+      return null;
     }
-    return null;
+
+    return [
+      {
+        id: contact[_logicalNames.contactFields.id],
+        name: contact[_logicalNames.contactFields.fullname],
+        entityType: _logicalNames.tables.contact,
+      },
+    ];
   }
 
   /**
@@ -225,7 +233,7 @@ this.cr4fd.caseFormCustomerContactConnector = (function () {
     const contactAttribute = formContext.getAttribute(
       _logicalNames.caseFields.contact
     );
-    contactAttribute.setRequiredLevel(requiredLevel);
+    contactAttribute?.setRequiredLevel(requiredLevel);
   }
 
   /**
